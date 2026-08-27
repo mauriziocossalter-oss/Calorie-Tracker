@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<title>Calorie Tracker</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--text:#17202a;--muted:#697586;--line:#e4e8ee;--accent:#2563eb;--good:#16834b;--bad:#c2413b;--shadow:0 2px 14px rgba(20,30,45,.07)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:720px;margin:auto;padding:18px 14px 44px}.top{display:flex;justify-content:space-between;align-items:center;margin:4px 2px 18px}.top h1{font-size:28px;margin:0}.top p{margin:4px 0 0;color:var(--muted);font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:17px;margin-bottom:14px;box-shadow:var(--shadow)}.card h2{font-size:18px;margin:0 0 14px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.field label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px;font-weight:600}.field input{width:100%;padding:13px;border:1px solid #d5dbe3;border-radius:12px;font-size:17px;background:#fff;color:var(--text)}
+button{border:0;border-radius:12px;padding:12px 15px;font-size:15px;font-weight:700;cursor:pointer}.primary{background:var(--accent);color:white;width:100%;margin-top:12px}.secondary{background:#eef2f7;color:#253041}.danger{background:#fff0ef;color:var(--bad)}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.stat{padding:13px;border:1px solid var(--line);border-radius:14px}.stat .label{font-size:12px;color:var(--muted)}.stat .value{font-size:22px;font-weight:750;margin-top:4px}.good{color:var(--good)}.bad{color:var(--bad)}.neutral{color:var(--text)}
+.periods{display:flex;gap:7px;margin-bottom:12px}.periods button{flex:1;padding:10px 6px}.periods .selected{background:#17202a;color:#fff}
+.chart-wrap{height:220px;position:relative}.chart{width:100%;height:100%;display:block}.chart-note{font-size:11px;color:var(--muted);margin-top:6px}
+.rows{display:flex;flex-direction:column;gap:8px}.row{display:grid;grid-template-columns:1.1fr .8fr .8fr .9fr;gap:5px;align-items:center;padding:11px 4px;border-bottom:1px solid var(--line);font-size:13px}.row.head{font-size:11px;color:var(--muted);font-weight:700;padding-top:0}.empty{color:var(--muted);text-align:center;padding:18px 0}
+.actions{display:flex;gap:8px;margin-top:12px}.actions button{flex:1}.small{font-size:12px;color:var(--muted);line-height:1.45}
+@media(min-width:600px){.stats{grid-template-columns:repeat(4,1fr)}.grid{grid-template-columns:1fr 1fr 1fr}}
+</style>
+</head>
+<body>
+<main>
+<section class="top"><div><h1>Calorie Tracker</h1><p>Bilancio energetico quotidiano</p></div><button id="todayBtn" class="secondary">Oggi</button></section>
+
+<section class="card">
+<h2>Inserisci giornata</h2>
+<div class="grid">
+<div class="field"><label for="date">Data</label><input id="date" type="date"></div>
+<div class="field"><label for="eaten">Calorie ingerite</label><input id="eaten" type="number" min="0" step="1" inputmode="numeric" placeholder="es. 2300"></div>
+<div class="field"><label for="burned">Calorie bruciate</label><input id="burned" type="number" min="0" step="1" inputmode="numeric" placeholder="es. 2800"></div>
+</div>
+<button id="save" class="primary">Salva giornata</button>
+<div class="actions"><button id="delete" class="danger">Cancella data</button><button id="clear" class="secondary">Svuota tutto</button></div>
+</section>
+
+<section class="card">
+<h2>Riepilogo</h2>
+<div class="periods"><button data-period="week" class="selected">7 giorni</button><button data-period="month">Mese</button><button data-period="all">Tutto</button></div>
+<div class="stats">
+<div class="stat"><div class="label">Media ingerite</div><div id="avgEaten" class="value">—</div></div>
+<div class="stat"><div class="label">Media bruciate</div><div id="avgBurned" class="value">—</div></div>
+<div class="stat"><div class="label">Media bilancio</div><div id="avgBalance" class="value">—</div></div>
+<div class="stat"><div class="label">Giorni registrati</div><div id="days" class="value">0</div></div>
+</div>
+<p id="periodText" class="small"></p>
+</section>
+
+<section class="card"><h2>Bilancio: deficit / surplus</h2><div class="chart-wrap"><svg id="balanceChart" class="chart" viewBox="0 0 700 220" preserveAspectRatio="none"></svg></div><div class="chart-note">Deficit = bruciate − ingerite. Sopra lo zero = deficit.</div></section>
+<section class="card"><h2>Calorie ingerite</h2><div class="chart-wrap"><svg id="eatenChart" class="chart" viewBox="0 0 700 220" preserveAspectRatio="none"></svg></div></section>
+<section class="card"><h2>Calorie bruciate</h2><div class="chart-wrap"><svg id="burnedChart" class="chart" viewBox="0 0 700 220" preserveAspectRatio="none"></svg></div></section>
+
+<section class="card"><h2>Storico</h2><div id="rows" class="rows"></div></section>
+</main>
+
+<script>
+const KEY='calorie-tracker-v1';
+let data=JSON.parse(localStorage.getItem(KEY)||'{}');
+let period='week';
+const $=id=>document.getElementById(id);
+const today=()=>new Date().toISOString().slice(0,10);
+$('date').value=today();
+
+$('todayBtn').onclick=()=>{$('date').value=today();loadDate()};
+$('date').onchange=loadDate;
+function loadDate(){const d=data[$('date').value];$('eaten').value=d?.eaten??'';$('burned').value=d?.burned??''}
+
+$('save').onclick=()=>{
+ const date=$('date').value,e=Number($('eaten').value),b=Number($('burned').value);
+ if(!date||!Number.isFinite(e)||!Number.isFinite(b)||e<0||b<0){alert('Inserisci data, calorie ingerite e calorie bruciate.');return}
+ data[date]={eaten:e,burned:b};persist();render()
+};
+$('delete').onclick=()=>{const d=$('date').value;if(data[d]){delete data[d];persist();loadDate();render()}};
+$('clear').onclick=()=>{if(confirm('Cancellare tutto lo storico?')){data={};persist();$('eaten').value='';$('burned').value='';render()}};
+document.querySelectorAll('[data-period]').forEach(b=>b.onclick=()=>{period=b.dataset.period;document.querySelectorAll('[data-period]').forEach(x=>x.classList.toggle('selected',x===b));render()});
+function persist(){localStorage.setItem(KEY,JSON.stringify(data))}
+function entries(){return Object.entries(data).map(([date,v])=>({date,eaten:+v.eaten,burned:+v.burned,balance:+v.burned-+v.eaten})).sort((a,b)=>a.date.localeCompare(b.date))}
+function shown(){
+ const all=entries();if(period==='all')return all;
+ const end=new Date();end.setHours(23,59,59,999);const start=new Date(end);
+ if(period==='week')start.setDate(end.getDate()-6);else start.setDate(1);
+ const s=start.toISOString().slice(0,10),e=end.toISOString().slice(0,10);
+ return all.filter(x=>x.date>=s&&x.date<=e)
+}
+const fmt=n=>Math.round(n).toLocaleString('it-IT');
+function render(){
+ const a=shown(),avg=k=>a.length?a.reduce((s,x)=>s+x[k],0)/a.length:0;
+ $('avgEaten').textContent=a.length?fmt(avg('eaten'))+' kcal':'—';
+ $('avgBurned').textContent=a.length?fmt(avg('burned'))+' kcal':'—';
+ const ab=avg('balance');$('avgBalance').textContent=a.length?(ab>=0?'+':'')+fmt(ab)+' kcal':'—';
+ $('avgBalance').className='value '+(ab>0?'good':ab<0?'bad':'neutral');$('days').textContent=a.length;
+ $('periodText').textContent=period==='week'?'Media degli ultimi 7 giorni (giorni presenti nello storico).':period==='month'?'Media dal primo giorno del mese a oggi.':'Media su tutto lo storico disponibile.';
+ draw('balanceChart',a,'balance');draw('eatenChart',a,'eaten');draw('burnedChart',a,'burned');renderRows(entries().slice().reverse())
+}
+function esc(s){return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')}
+function draw(id,a,key){
+ const svg=$(id),W=700,H=220,L=42,R=12,T=12,B=30;let vals=a.map(x=>x[key]);
+ if(!vals.length){svg.innerHTML='<text x="350" y="115" text-anchor="middle" fill="#697586" font-size="14">Nessun dato nel periodo</text>';return}
+ let min=Math.min(...vals),max=Math.max(...vals);if(key==='balance'){min=Math.min(min,0);max=Math.max(max,0)}
+ if(min===max){min-=100;max+=100}const pad=(max-min)*.12;min-=pad;max+=pad;
+ const x=i=>a.length===1?(L+W-R)/2:L+i*(W-L-R)/(a.length-1),y=v=>T+(max-v)*(H-T-B)/(max-min);
+ let out='';for(let i=0;i<5;i++){const v=min+(max-min)*i/4,yy=y(v);out+=`<line x1="${L}" x2="${W-R}" y1="${yy}" y2="${yy}" stroke="#e4e8ee"/><text x="${L-7}" y="${yy+4}" text-anchor="end" fill="#697586" font-size="10">${Math.round(v)}</text>`}
+ if(key==='balance'&&min<0&&max>0){const yy=y(0);out+=`<line x1="${L}" x2="${W-R}" y1="${yy}" y2="${yy}" stroke="#697586" stroke-width="1.5"/>`}
+ let pts=a.map((v,i)=>`${x(i)},${y(v[key])}`).join(' ');
+ out+=`<polyline points="${pts}" fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+ a.forEach((v,i)=>{const xx=x(i),yy=y(v[key]);out+=`<circle cx="${xx}" cy="${yy}" r="4" fill="#fff" stroke="#2563eb" stroke-width="2"/><text x="${xx}" y="${H-9}" text-anchor="middle" fill="#697586" font-size="9">${v.date.slice(5)}</text>`});
+ svg.innerHTML=out
+}
+function renderRows(a){
+ const box=$('rows');if(!a.length){box.innerHTML='<div class="empty">Nessuna giornata registrata.</div>';return}
+ box.innerHTML='<div class="row head"><span>Data</span><span>Ingerite</span><span>Bruciate</span><span>Bilancio</span></div>'+
+ a.map(x=>`<div class="row"><span>${esc(x.date)}</span><span>${fmt(x.eaten)}</span><span>${fmt(x.burned)}</span><span class="${x.balance>0?'good':x.balance<0?'bad':'neutral'}">${x.balance>0?'+':''}${fmt(x.balance)}</span></div>`).join('')
+}
+loadDate();render();
+</script>
+</body>
+</html>
